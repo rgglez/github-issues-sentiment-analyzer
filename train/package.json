@@ -1,0 +1,30 @@
+{
+  "name": "train",
+  "version": "1.0.0",
+  "description": "Train the GitHub issue sentiment classifier",
+  "type": "module",
+  "scripts": {
+    "train": "tsx train.ts",
+    "check": "tsc --noEmit",
+    "build": "tsc",
+    "start": "node dist/train.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "packageManager": "pnpm@10.20.0",
+  "dependencies": {
+    "commander": "^15.0.0",
+    "csv-parse": "^7.0.2",
+    "natural": "^8.1.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "tsx": "^4.23.9",
+    "typescript": "^7.0.2"
+  }
+}
