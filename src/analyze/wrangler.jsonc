@@ -2,13 +2,23 @@
 	"$schema": "./node_modules/wrangler/config-schema.json",
 	"name": "analyze",
 	"compatibility_date": "2026-08-06",
-	"compatibility_flags": [
-		"nodejs_als"
-	],
+	"compatibility_flags": ["nodejs_compat"],
 	"main": ".svelte-kit/cloudflare/_worker.js",
 	"assets": {
 		"binding": "ASSETS",
 		"directory": ".svelte-kit/cloudflare"
+	},
+	"r2_buckets": [
+		{
+			"binding": "MODELS",
+			"bucket_name": "github-issues-sentiment-models"
+		}
+	],
+	"vars": {
+		"SENTIMENT_MODEL_KEY": "github-sentiment-svm-model.json"
+	},
+	"observability": {
+		"enabled": true
 	},
 	"workers_dev": true,
 	"preview_urls": true

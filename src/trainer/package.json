@@ -1,13 +1,13 @@
 {
-  "name": "train",
+  "name": "trainer",
   "version": "1.0.0",
-  "description": "Train the GitHub issue sentiment classifier",
+  "description": "Train and test GitHub issue sentiment classifiers",
   "type": "module",
   "scripts": {
-    "train": "tsx train.ts",
+    "trainer": "tsx trainer.ts",
     "check": "tsc --noEmit",
     "build": "tsc",
-    "start": "node dist/train.js"
+    "start": "node dist/trainer.js"
   },
   "keywords": [],
   "author": "",
