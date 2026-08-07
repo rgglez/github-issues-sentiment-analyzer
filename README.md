@@ -161,6 +161,17 @@ regenerate the Worker types with `pnpm exec wrangler types`. The model is
 cached for the lifetime of each Worker isolate. Use a versioned object key and
 deploy the configuration change when publishing a replacement model.
 
+## TODO
+
+- Evaluate Cloudflare Workers AI's `distilbert-sst-2-int8` as a contextual
+  sentiment classifier, especially for negations such as `not bad`.
+- Compare its accuracy, latency, and operating cost against the current
+  TF-IDF SVM using a labeled test set of GitHub issues.
+- Determine how to preserve the `neutral` class because the available
+  DistilBERT SST-2 model only produces positive and negative classifications.
+- Keep DistilBERT optional until it demonstrates a meaningful improvement
+  over the MVP classifiers.
+
 ## Dataset attribution
 
 The included `data/github_gold.csv` is _A gold standard for polarity of
