@@ -2,11 +2,12 @@
 // for information about these interfaces
 declare global {
 	namespace App {
+		/** Cloudflare bindings and request context exposed to SvelteKit server routes. */
 		interface Platform {
 			env: Env;
 			ctx: ExecutionContext;
 			caches: CacheStorage;
-			cf?: IncomingRequestCfProperties
+			cf?: IncomingRequestCfProperties;
 		}
 
 		// interface Error {}

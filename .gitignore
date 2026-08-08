@@ -11,6 +11,15 @@ eggs/
 .eggs/
 lib/
 lib64/
+# Keep the SvelteKit server implementation while retaining the generic Python rule above.
+!src/classifier/src/lib/
+src/classifier/src/lib/*
+!src/classifier/src/lib/server/
+src/classifier/src/lib/server/*
+!src/classifier/src/lib/server/sentiment-model.ts
+!src/classifier/src/lib/assets/
+src/classifier/src/lib/assets/*
+!src/classifier/src/lib/assets/favicon.svg
 parts/
 sdist/
 var/

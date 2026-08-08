@@ -130,36 +130,31 @@ percentages are reported as zero.
 
 ## Cloudflare R2 deployment
 
-The SvelteKit Worker in `src/analyze` reads the SVM artifact through the
-private `MODELS` R2 binding configured in `wrangler.jsonc`. Create the bucket,
-train the model, and upload it from the repository root:
+The SvelteKit Worker in `src/classifier` reads the three classifier artifacts
+through the private `MODELS` R2 binding configured in `wrangler.jsonc`. Create
+the bucket, train the models, and upload them from the repository root:
 
 ```sh
-cd src/analyze
+cd src/classifier
 pnpm exec wrangler r2 bucket create github-issues-sentiment-models
 cd ../trainer
-pnpm trainer -- --classifier svm
-cd ../analyze
-pnpm exec wrangler r2 object put \
-  github-issues-sentiment-models/github-sentiment-svm-model.json \
-  --file ../../data/github-sentiment-svm-model.json
+pnpm trainer -- --classifier all
+cd ../..
+make upload-models
 ```
 
-The Worker exposes `POST /api/sentiment` and expects a JSON body containing a
-non-empty `text` field:
+The Worker exposes `GET /api/issues` and accepts a public repository, model,
+and page as query parameters:
 
 ```sh
-curl -X POST https://your-worker.example/api/sentiment \
-  -H 'content-type: application/json' \
-  --data '{"text":"Not bad code at all. You are getting better."}'
+curl 'https://your-worker.example/api/issues?repository=tinymce/tinymce&model=svm&page=1'
 ```
 
 R2 remains private: the application reads the object internally through the
-binding, so the model does not need a public bucket URL. If the artifact name
-changes, update `SENTIMENT_MODEL_KEY` in `src/analyze/wrangler.jsonc` and
-regenerate the Worker types with `pnpm exec wrangler types`. The model is
-cached for the lifetime of each Worker isolate. Use a versioned object key and
-deploy the configuration change when publishing a replacement model.
+binding, so the models do not need public bucket URLs. The parsed models are
+cached for the lifetime of each Worker isolate. Keep the expected object names
+in sync with `src/classifier/src/lib/server/sentiment-model.ts` and regenerate
+Worker types after changing bindings in `src/classifier/wrangler.jsonc`.
 
 ## TODO
 

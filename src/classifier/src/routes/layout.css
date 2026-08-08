@@ -1,0 +1,548 @@
+@import 'tailwindcss';
+
+/* Establish the dark theme, typography, and predictable global box model. */
+:root {
+	font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+	color: #e9ecf3;
+	background: #080a0f;
+	font-synthesis: none;
+}
+* {
+	box-sizing: border-box;
+}
+body {
+	margin: 0;
+	min-width: 320px;
+	min-height: 100vh;
+	background: radial-gradient(circle at 70% 0%, #142437 0, transparent 35rem), #080a0f;
+}
+button,
+input {
+	font: inherit;
+}
+
+/* Constrain the primary page content and introduce the hero hierarchy. */
+main {
+	width: min(1180px, calc(100% - 36px));
+	margin: auto;
+	min-height: calc(100vh - 100px);
+}
+.hero {
+	padding: 88px 0 54px;
+	max-width: 800px;
+}
+.eyebrow {
+	color: #7f8ba0;
+	font:
+		700 0.72rem/1.2 ui-monospace,
+		monospace;
+	letter-spacing: 0.17em;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+.pulse {
+	width: 8px;
+	height: 8px;
+	background: #35d6a1;
+	border-radius: 50%;
+	box-shadow: 0 0 15px #35d6a1;
+}
+h1 {
+	font-size: clamp(3rem, 7vw, 6.25rem);
+	line-height: 0.94;
+	letter-spacing: -0.065em;
+	margin: 24px 0 26px;
+	font-weight: 800;
+}
+h1 span {
+	color: #8993a5;
+}
+.hero > p {
+	color: #8e98a9;
+	font-size: 1.08rem;
+	line-height: 1.7;
+	max-width: 610px;
+}
+
+/* Style the shared analysis control surface and section headings. */
+.control-panel {
+	border: 1px solid #252a34;
+	border-radius: 18px;
+	background: rgba(15, 18, 25, 0.88);
+	padding: 30px;
+	box-shadow: 0 25px 70px #0006;
+}
+.panel-heading,
+.results-heading {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 24px;
+	border-bottom: 1px solid #252a34;
+	padding-bottom: 24px;
+	margin-bottom: 28px;
+}
+.panel-heading > div,
+.results-heading > div {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+}
+.panel-heading span,
+.results-heading span {
+	color: #35d6a1;
+	font:
+		700 0.7rem ui-monospace,
+		monospace;
+	border: 1px solid #2d6e5b;
+	padding: 6px;
+	border-radius: 5px;
+}
+h2 {
+	margin: 0;
+	font-size: 1.12rem;
+}
+.panel-heading p,
+.results-heading p {
+	color: #667085;
+	margin: 0;
+	font-size: 0.82rem;
+}
+
+/* Lay out the accessible model radio controls as selectable cards. */
+fieldset {
+	border: 0;
+	margin: 0 0 28px;
+	padding: 0;
+}
+legend,
+.repo-field > span {
+	display: block;
+	color: #737e91;
+	letter-spacing: 0.12em;
+	font-size: 0.67rem;
+	font-weight: 750;
+	margin-bottom: 13px;
+}
+.model-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 12px;
+}
+.model-grid label {
+	position: relative;
+	padding: 18px 18px 17px 48px;
+	border-radius: 10px;
+	border: 1px solid #292f3a;
+	background: #12151c;
+	cursor: pointer;
+	transition: 0.2s;
+}
+.model-grid label:hover {
+	border-color: #4c5668;
+	transform: translateY(-1px);
+}
+.model-grid label.active {
+	border-color: #35d6a1;
+	background: #10231f;
+	box-shadow: inset 0 0 0 1px #35d6a122;
+}
+.model-grid input {
+	position: absolute;
+	opacity: 0;
+}
+.radio-dot {
+	position: absolute;
+	left: 18px;
+	top: 20px;
+	width: 16px;
+	height: 16px;
+	border: 1px solid #596274;
+	border-radius: 50%;
+}
+.active .radio-dot {
+	border: 5px solid #35d6a1;
+	background: #10151a;
+}
+.model-grid strong,
+.model-grid small {
+	display: block;
+}
+.model-grid strong {
+	font-size: 0.92rem;
+	margin-bottom: 5px;
+}
+.model-grid small {
+	color: #687386;
+	font-size: 0.72rem;
+}
+
+/* Present the repository field and submit action as one composed input. */
+.repo-input {
+	display: flex;
+	align-items: center;
+	border: 1px solid #303641;
+	border-radius: 10px;
+	background: #0b0e13;
+	padding: 5px 5px 5px 16px;
+}
+.repo-input:focus-within {
+	border-color: #35d6a1;
+	box-shadow: 0 0 0 3px #35d6a116;
+}
+.repo-input svg {
+	width: 20px;
+	fill: #778194;
+	flex: 0 0 auto;
+}
+.repo-input input {
+	min-width: 0;
+	flex: 1;
+	border: 0;
+	outline: 0;
+	background: transparent;
+	color: white;
+	padding: 14px;
+	font-size: 0.9rem;
+}
+.repo-input button {
+	border: 0;
+	border-radius: 7px;
+	padding: 13px 20px;
+	color: #07120e;
+	background: #35d6a1;
+	font-weight: 800;
+	cursor: pointer;
+}
+.repo-input button:hover {
+	background: #63e6ba;
+}
+.repo-input button:disabled {
+	opacity: 0.65;
+	cursor: wait;
+}
+.repo-input button span {
+	margin-left: 8px;
+}
+
+/* Highlight API and validation errors beneath the controls. */
+.error {
+	margin-top: 22px;
+	border: 1px solid #7f323b;
+	border-radius: 10px;
+	padding: 16px 18px;
+	background: #30141a;
+	color: #ffc3c8;
+	font-size: 0.9rem;
+}
+
+/* Arrange analyzed issues into three sentiment-specific kanban columns. */
+.results {
+	margin-top: 70px;
+}
+.kanban {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 16px;
+	align-items: start;
+}
+.column {
+	border-radius: 13px;
+	padding: 12px;
+	min-width: 0;
+}
+.column.negative {
+	background: #2b151a;
+	border: 1px solid #51252d;
+}
+.column.neutral {
+	background: #191c22;
+	border: 1px solid #30353e;
+}
+.column.positive {
+	background: #10251e;
+	border: 1px solid #1e4a3b;
+}
+
+/* Format each column header and its running issue count. */
+.column-title {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	padding: 5px 5px 14px;
+}
+.column-title h3 {
+	margin: 0;
+	font-size: 0.82rem;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+}
+.column-title b {
+	margin-left: auto;
+	min-width: 23px;
+	text-align: center;
+	padding: 3px 6px;
+	border-radius: 20px;
+	background: #ffffff10;
+	font-size: 0.68rem;
+}
+
+/* Render issue summaries as compact cards with sentiment-colored accents. */
+.cards {
+	display: grid;
+	gap: 10px;
+	min-width: 0;
+}
+article {
+	min-width: 0;
+	max-width: 100%;
+	overflow-x: auto;
+	background: #10131a;
+	border: 1px solid #2a2f39;
+	border-radius: 10px;
+	padding: 18px;
+	box-shadow: 0 5px 18px #0003;
+}
+.negative article {
+	border-left: 2px solid #e15a68;
+}
+.neutral article {
+	border-left: 2px solid #7e899c;
+}
+.positive article {
+	border-left: 2px solid #35d6a1;
+}
+.card-top {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 14px;
+}
+.card-top small {
+	color: #657084;
+	font:
+		600 0.63rem ui-monospace,
+		monospace;
+	text-transform: uppercase;
+}
+article h4 {
+	margin: 0 0 11px;
+	min-width: 0;
+	color: #f2f4f8;
+	font-size: 0.95rem;
+	line-height: 1.42;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+article h4 a {
+	color: inherit;
+	text-decoration-color: transparent;
+	text-underline-offset: 3px;
+}
+article h4 a:hover,
+article h4 a:focus-visible {
+	color: #35d6a1;
+	text-decoration-color: currentColor;
+}
+article h4 a span {
+	display: inline-block;
+	margin-left: 0.4em;
+	font-size: 0.75em;
+}
+article p {
+	margin: 0;
+	color: #818b9d;
+	font-size: 0.79rem;
+	line-height: 1.62;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+	white-space: pre-wrap;
+}
+
+/* Communicate pagination progress and provide the invisible scroll trigger. */
+.loader,
+.end {
+	color: #788397;
+	text-align: center;
+	padding: 34px 0;
+	font-size: 0.82rem;
+}
+.loader span {
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	border: 2px solid #35d6a155;
+	border-top-color: #35d6a1;
+	border-radius: 50%;
+	animation: spin 0.7s linear infinite;
+	vertical-align: -2px;
+	margin-right: 7px;
+}
+.sentinel {
+	height: 2px;
+}
+
+/* Surface noteworthy incoming issues in the current viewport before stacking them. */
+.issue-preview {
+	position: fixed;
+	bottom: 24px;
+	z-index: 30;
+	max-height: calc(100vh - 48px);
+	overflow: auto;
+	border: 1px solid #303742;
+	border-radius: 14px;
+	padding: 10px;
+	background: rgba(8, 10, 15, 0.92);
+	box-shadow: 0 24px 80px #000c;
+	backdrop-filter: blur(12px);
+	animation: preview-in 180ms ease-out;
+}
+.issue-preview.leaving {
+	pointer-events: none;
+	animation: preview-slide-up 650ms cubic-bezier(0.55, 0, 0.8, 0.45) forwards;
+}
+.issue-preview.negative {
+	border-color: #7f323b;
+}
+.issue-preview.neutral {
+	border-color: #596274;
+}
+.issue-preview.positive {
+	border-color: #28745c;
+}
+.issue-preview .preview-label {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 5px 5px 12px;
+	color: #d9dee8;
+	font-size: 0.72rem;
+	font-weight: 750;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+}
+.issue-preview .preview-label small {
+	margin-left: auto;
+	color: #7c8798;
+	font-size: 0.6rem;
+}
+.issue-preview.negative article {
+	border-left: 2px solid #e15a68;
+}
+.issue-preview.neutral article {
+	border-left: 2px solid #7e899c;
+}
+.issue-preview.positive article {
+	border-left: 2px solid #35d6a1;
+}
+
+/* Keep the return shortcut visible above long, infinitely loaded result lists. */
+.back-to-top {
+	position: fixed;
+	right: max(18px, calc((100vw - 1180px) / 2));
+	bottom: 22px;
+	z-index: 20;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	border: 1px solid #2d6e5b;
+	border-radius: 999px;
+	padding: 10px 15px;
+	background: rgba(16, 35, 31, 0.94);
+	box-shadow: 0 8px 28px #0008;
+	color: #aaf2d8;
+	font-size: 0.75rem;
+	font-weight: 750;
+	cursor: pointer;
+	backdrop-filter: blur(8px);
+}
+.back-to-top:hover,
+.back-to-top:focus-visible {
+	border-color: #35d6a1;
+	background: #163b31;
+	color: #fff;
+}
+.back-to-top span {
+	font-size: 1rem;
+	line-height: 1;
+}
+
+/* Separate the application footer from the analysis results. */
+footer {
+	width: min(1180px, calc(100% - 36px));
+	margin: 80px auto 0;
+	padding: 28px 0;
+	border-top: 1px solid #20242c;
+	display: flex;
+	justify-content: space-between;
+	color: #535d6e;
+	font-size: 0.68rem;
+}
+footer span {
+	color: #8b95a7;
+	font-weight: 800;
+	letter-spacing: 0.15em;
+}
+footer p {
+	margin: 0;
+}
+
+/* Rotate the loader indicator continuously while another page is requested. */
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+/* Bring a newly classified issue into focus without shifting the page layout. */
+@keyframes preview-in {
+	from {
+		opacity: 0;
+		transform: translateY(12px) scale(0.98);
+	}
+}
+
+/* Slide a preview above the viewport before adding it to the destination stack. */
+@keyframes preview-slide-up {
+	to {
+		opacity: 0;
+		transform: translateY(calc(-100vh - 100%));
+	}
+}
+
+/* Respect readers who disable non-essential motion at the operating-system level. */
+@media (prefers-reduced-motion: reduce) {
+	.issue-preview {
+		animation: none;
+	}
+}
+
+/* Collapse controls and kanban columns into a single-column mobile layout. */
+@media (max-width: 760px) {
+	.hero {
+		padding-top: 55px;
+	}
+	.control-panel {
+		padding: 20px;
+	}
+	.panel-heading,
+	.results-heading {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+	.model-grid,
+	.kanban {
+		grid-template-columns: 1fr;
+	}
+	.repo-input {
+		flex-wrap: wrap;
+	}
+	.repo-input button {
+		width: 100%;
+	}
+	footer {
+		gap: 10px;
+		flex-direction: column;
+	}
+}

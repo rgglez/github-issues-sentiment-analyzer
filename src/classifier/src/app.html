@@ -1,12 +1,15 @@
 <!doctype html>
+<!-- Provide the document shell that SvelteKit fills with route metadata and rendered content. -->
 <html lang="en">
 	<head>
+		<!-- Define document encoding, responsive scaling, and SvelteKit-managed head elements. -->
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
+		<!-- Mount the rendered application without adding an extra layout box. -->
 		<div style="display: contents">%sveltekit.body%</div>
 	</body>
 </html>
