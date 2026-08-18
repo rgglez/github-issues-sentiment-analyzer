@@ -4,6 +4,11 @@
 	"compatibility_date": "2026-08-07",
 	"compatibility_flags": ["nodejs_compat"],
 	"main": ".svelte-kit/cloudflare/_worker.js",
+	// Public reCAPTCHA site key: read at runtime via $env/dynamic/public, so it must
+	// be a Worker var (build-time exports are NOT baked into the bundle).
+	"vars": {
+		"PUBLIC_RECAPTCHA_SITE_KEY": "6LcRyostAAAAAI-myW5o-vn9s1BdvkEdDwTZlh8_"
+	},
 	"assets": {
 		"binding": "ASSETS",
 		"directory": ".svelte-kit/cloudflare"

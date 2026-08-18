@@ -1,6 +1,9 @@
 allowBuilds:
   esbuild: set this to true or false
   workerd: set this to true or false
+
 onlyBuiltDependencies:
-  - workerd
   - esbuild
+  - esbuild@0.28.1
+  - workerd
+  - workerd@1.20260730.1

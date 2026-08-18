@@ -17,6 +17,31 @@ pnpm exec wrangler types
 The configured production bucket is `github-issues-sentiment-models`, and the
 object keys are `github-sentiment-{svm,bayes,logistic}-model.json`. Creation and upload commands are documented in the repository's main README.
 
+### reCAPTCHA v3
+
+`GET /api/issues` requires a Google reCAPTCHA v3 token on every request
+(including infinite-scroll pages). The client sends it as
+`X-Recaptcha-Token`; the Worker verifies it with Google before GitHub/R2 work.
+
+1. Create a v3 key pair in the [reCAPTCHA admin](https://www.google.com/recaptcha/admin)
+   and allow `localhost` plus your production hostname(s).
+2. Copy `.env.example` to `.env` and set both keys for local Vite:
+   - `PUBLIC_RECAPTCHA_SITE_KEY` — public site key
+   - `RECAPTCHA_SECRET_KEY` — secret (local only)
+3. For `wrangler dev` / `pnpm preview`, put both keys in `.dev.vars` (Vite's
+   `.env` is not read by Wrangler):
+   ```sh
+   RECAPTCHA_SECRET_KEY=your_secret_key_here
+   PUBLIC_RECAPTCHA_SITE_KEY=your_site_key_here
+   ```
+4. Production secret (never commit it):
+   ```sh
+   pnpm exec wrangler secret put RECAPTCHA_SECRET_KEY
+   ```
+5. The site key is read at runtime via `$env/dynamic/public`, not baked in at
+   build time, so production takes it from `vars.PUBLIC_RECAPTCHA_SITE_KEY` in
+   `wrangler.jsonc`. Update it there when the key pair changes.
+
 ## Development
 
 ```sh

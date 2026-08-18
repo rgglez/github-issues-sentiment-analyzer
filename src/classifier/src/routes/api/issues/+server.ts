@@ -1,5 +1,7 @@
+import { env } from '$env/dynamic/private';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { RecaptchaError, verifyRecaptcha } from '$lib/server/recaptcha';
 import {
 	classifySentiment,
 	loadModel,
@@ -38,12 +40,19 @@ interface GithubIssue {
 }
 
 /** Validate a request, obtain a cached GitHub page, and classify every issue body. */
-export const GET: RequestHandler = async ({ url, platform, fetch }) => {
+export const GET: RequestHandler = async ({ url, platform, fetch, request }) => {
 	// Fail explicitly when the route is executed outside a Cloudflare-bound environment.
 	if (!platform)
 		return json({ error: 'Cloudflare platform bindings are unavailable.' }, { status: 503 });
 
 	try {
+		// Reject bots before GitHub, cache, or R2 work.
+		await verifyRecaptcha(
+			request.headers.get('X-Recaptcha-Token'),
+			platform.env.RECAPTCHA_SECRET_KEY || env.RECAPTCHA_SECRET_KEY,
+			fetch
+		);
+
 		// Normalize and validate all query parameters before external or storage operations.
 		const repository = parseRepository(url.searchParams.get('repository'));
 		const modelName = parseModel(url.searchParams.get('model'));
@@ -94,10 +103,16 @@ export const GET: RequestHandler = async ({ url, platform, fetch }) => {
 			}))
 		});
 	} catch (error) {
-		// Map validation, GitHub, and model failures to stable API status categories.
+		// Map validation, captcha, GitHub, and model failures to stable API status categories.
 		const message = error instanceof Error ? error.message : 'Unable to analyze issues.';
 		const status =
-			error instanceof SentimentModelError ? 503 : message.startsWith('GitHub') ? 502 : 400;
+			error instanceof RecaptchaError
+				? error.status
+				: error instanceof SentimentModelError
+					? 503
+					: message.startsWith('GitHub')
+						? 502
+						: 400;
 		console.error(JSON.stringify({ message: 'issue analysis failed', error: message }));
 		return json({ error: message }, { status });
 	}

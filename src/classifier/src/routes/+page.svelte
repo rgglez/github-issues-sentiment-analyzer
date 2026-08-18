@@ -1,5 +1,8 @@
 <script lang="ts">
+	import { env } from '$env/dynamic/public';
 	import { onMount } from 'svelte';
+
+	const recaptchaSiteKey = env.PUBLIC_RECAPTCHA_SITE_KEY ?? '';
 
 	/** Names of the sentiment models that the UI and API support. */
 	type Model = 'svm' | 'bayes' | 'logistic';
@@ -148,6 +151,20 @@
 		}
 	}
 
+	/** Obtain a fresh reCAPTCHA v3 token for the current analysis request. */
+	function getRecaptchaToken(): Promise<string> {
+		if (!recaptchaSiteKey) return Promise.reject(new Error('reCAPTCHA is not configured.'));
+		const grecaptcha = window.grecaptcha;
+		if (!grecaptcha) return Promise.reject(new Error('reCAPTCHA failed to load.'));
+		return new Promise((resolve, reject) => {
+			grecaptcha.ready(() => {
+				grecaptcha
+					.execute(recaptchaSiteKey, { action: 'analyze_issues' })
+					.then(resolve, () => reject(new Error('reCAPTCHA verification failed.')));
+			});
+		});
+	}
+
 	/** Reset any previous run and start an analysis from the first page. */
 	async function analyze() {
 		issues = [];
@@ -169,13 +186,16 @@
 		error = '';
 		const nextPage = page + 1;
 		try {
+			const recaptchaToken = await getRecaptchaToken();
 			// Serialize the current form selection into the API query string.
 			const params = new URLSearchParams({
 				repository,
 				model: selectedModel,
 				page: String(nextPage)
 			});
-			const response = await fetch(`/api/issues?${params}`);
+			const response = await fetch(`/api/issues?${params}`, {
+				headers: { 'X-Recaptcha-Token': recaptchaToken }
+			});
 			const result = (await response.json()) as ApiResponse;
 			// Convert non-success API responses into the component's normal error path.
 			if (!response.ok || !result.issues) throw new Error(result.error ?? 'Unable to load issues.');
@@ -198,6 +218,10 @@
 <svelte:head>
 	<title>Issue Pulse · GitHub sentiment analyzer</title>
 	<meta name="description" content="Analyze the sentiment of public GitHub issues." />
+	{#if recaptchaSiteKey}
+		<script src="https://www.google.com/recaptcha/api.js?render={recaptchaSiteKey}" async defer
+		></script>
+	{/if}
 </svelte:head>
 
 <!-- Present the product purpose before the analysis controls. -->
