@@ -35,7 +35,11 @@ const SENTIMENT_LABELS = ["positive", "neutral", "negative"] as const;
 const DEFAULT_SAMPLES = [
     "Thanks, this works perfectly now!",
     "This is completely broken and keeps crashing.",
-    "The patch updates the dependency to version 4."
+    "The patch updates the dependency to version 4.",
+    "not so bad",
+    "This is not good",
+    "It's not working at all",
+    "Not bad at all, thanks!"
 ];
 
 //------------------------------------------------------------------------------
@@ -73,10 +77,11 @@ const datasetRowSchema = z.object({
 
 // Validate Commander output as an additional runtime boundary.
 const cliOptionsSchema = z.object({
-    classifier: z.enum(CLASSIFIER_NAMES),
+    classifier: z.enum([...CLASSIFIER_NAMES, "all"]),
     dataset: z.string().trim().min(1),
     model: z.string().trim().min(1).optional(),
     test: z.boolean(),
+    eval: z.boolean(),
     issue: z.string().trim().min(1).optional()
 });
 
@@ -112,7 +117,7 @@ program
     .version("1.0.0")
     .option(
         "-c, --classifier <name>",
-        "Classifier to train or test: bayes, logistic, or svm",
+        "Classifier to train or test: bayes, logistic, svm, or all",
         "bayes"
     )
     .option(
@@ -127,6 +132,11 @@ program
     .option(
         "-t, --test",
         "Load the existing model and evaluate sample text without training",
+        false
+    )
+    .option(
+        "-e, --eval",
+        "Train on 80% of the dataset and report metrics on the other 20% without saving",
         false
     )
     .option(
@@ -146,6 +156,14 @@ if (options.issue && !options.test) {
     program.error("--issue can only be used together with --test");
 }
 
+if (options.eval && options.test) {
+    program.error("--eval cannot be used together with --test");
+}
+
+if (options.classifier === "all" && options.model) {
+    program.error("--model cannot be used together with --classifier all");
+}
+
 //------------------------------------------------------------------------------
 
 // Recreate __dirname for this ES module and locate the trainer package whether
@@ -158,11 +176,16 @@ const trainerDirectory =
 // Resolve CLI paths from the trainer package so execution works from any current
 // working directory and produces identical paths before and after compilation.
 const datasetPath = path.resolve(trainerDirectory, options.dataset);
-const defaultModelPath = getDefaultModelPath(options.classifier);
-const modelPath = path.resolve(
-    trainerDirectory,
-    options.model ?? defaultModelPath
-);
+const selectedClassifiers: readonly ClassifierName[] =
+    options.classifier === "all" ? CLASSIFIER_NAMES : [options.classifier];
+
+/** Resolve the explicit --model path or the classifier's default artifact. */
+function resolveModelPath(name: ClassifierName): string {
+    return path.resolve(
+        trainerDirectory,
+        options.model ?? getDefaultModelPath(name)
+    );
+}
 
 //------------------------------------------------------------------------------
 
@@ -170,9 +193,11 @@ const modelPath = path.resolve(
  * Stream the CSV dataset, validate every row, then train and save the selected
  * sentiment classifier.
  */
-function trainModel(): void {
+async function trainModel(name: ClassifierName): Promise<void> {
     // Create the classifier and track accepted rows, rejected rows, and labels.
-    const classifier = createClassifier(options.classifier);
+    const classifier = createClassifier(name);
+    const modelPath = resolveModelPath(name);
+    const heldOut: DatasetRow[] = [];
     let rowNumber = 1;
     let trainingCount = 0;
     let skippedCount = 0;
@@ -180,20 +205,21 @@ function trainModel(): void {
     const invalidRowExamples: InvalidRowExample[] = [];
 
     // Stream the dataset instead of loading the entire CSV file into memory.
-    fs.createReadStream(datasetPath)
-        .pipe(
-            // Parse the semicolon-delimited CSV and expose each record as an object
-            // whose properties match the header names, such as Text and Polarity.
-            parse({
-                columns: true,
-                delimiter: ";",
-                bom: true,
-                skip_empty_lines: true,
-                trim: true,
-                relax_quotes: true
-            })
-        )
-        .on("data", (rawRow: unknown) => {
+    // Parse the semicolon-delimited CSV and expose each record as an object
+    // whose properties match the header names, such as Text and Polarity.
+    const records = fs.createReadStream(datasetPath).pipe(
+        parse({
+            columns: true,
+            delimiter: ";",
+            bom: true,
+            skip_empty_lines: true,
+            trim: true,
+            relax_quotes: true
+        })
+    );
+
+    try {
+        for await (const rawRow of records as AsyncIterable<unknown>) {
             rowNumber++;
 
             // Validate untrusted CSV data before reading its fields.
@@ -201,8 +227,8 @@ function trainModel(): void {
             if (!result.success) {
                 skippedCount++;
 
-                // Retain a small diagnostic sample without flooding the output when a
-                // large number of records is invalid.
+                // Retain a small diagnostic sample without flooding the output
+                // when a large number of records is invalid.
                 if (invalidRowExamples.length < 5) {
                     invalidRowExamples.push({
                         rowNumber,
@@ -212,68 +238,136 @@ function trainModel(): void {
                         )
                     });
                 }
-                return;
+                continue;
             }
 
-            // Clean validated text and add the canonical sentiment label.
+            // Clean validated text and add the canonical sentiment label. With
+            // --eval, a deterministic 20% of the rows is held out for testing.
             const row: DatasetRow = result.data;
-            const text = cleanText(row.Text);
-            classifier.addDocument(text, row.Polarity);
+            if (options.eval && isHeldOut(row.ID)) {
+                heldOut.push(row);
+                continue;
+            }
+            classifier.addDocument(cleanText(row.Text), row.Polarity);
             trainingCount++;
             labelCounts.set(
                 row.Polarity,
                 (labelCounts.get(row.Polarity) ?? 0) + 1
             );
-        })
-        .on("end", async () => {
-            // Prevent creation of an empty model when the input schema is invalid.
-            if (trainingCount === 0) {
-                console.error(
-                    "No valid rows were found. Check the CSV schema.",
-                    {
-                        skippedCount,
-                        invalidRowExamples
-                    }
-                );
-                process.exitCode = 1;
-                return;
-            }
+        }
+    } catch (error) {
+        // Report file-system and CSV parsing failures with a non-zero exit status.
+        console.error("Error reading the CSV file:", error);
+        process.exitCode = 1;
+        return;
+    }
 
-            // Report validation and label-distribution results before fitting.
-            console.log("Dataset loaded:", {
-                datasetPath,
-                trainingCount,
-                skippedCount,
-                labels: Object.fromEntries(labelCounts),
-                invalidRowExamples
-            });
-
-            // Fit the classifier using all valid documents collected from the stream.
-            console.log(`Training ${options.classifier} model...`);
-            try {
-                await trainClassifier(options.classifier, classifier);
-            } catch (error) {
-                console.error("Error training the classifier:", error);
-                process.exitCode = 1;
-                return;
-            }
-
-            // Serialize the trained classifier for use by the analysis application.
-            classifier.save(modelPath, error => {
-                if (error) {
-                    console.error(`Error saving model to ${modelPath}:`, error);
-                    process.exitCode = 1;
-                    return;
-                }
-
-                console.log(`Model saved to ${modelPath}`);
-            });
-        })
-        .on("error", (error: Error) => {
-            // Report file-system and CSV parsing failures with a non-zero exit status.
-            console.error("Error reading the CSV file:", error);
-            process.exitCode = 1;
+    // Prevent creation of an empty model when the input schema is invalid.
+    if (trainingCount === 0) {
+        console.error("No valid rows were found. Check the CSV schema.", {
+            skippedCount,
+            invalidRowExamples
         });
+        process.exitCode = 1;
+        return;
+    }
+
+    // Report validation and label-distribution results before fitting.
+    console.log("Dataset loaded:", {
+        datasetPath,
+        trainingCount,
+        skippedCount,
+        labels: Object.fromEntries(labelCounts),
+        invalidRowExamples
+    });
+
+    // Fit the classifier using all valid documents collected from the stream.
+    console.log(`Training ${name} model...`);
+    try {
+        await trainClassifier(name, classifier);
+    } catch (error) {
+        console.error("Error training the classifier:", error);
+        process.exitCode = 1;
+        return;
+    }
+
+    if (options.eval) {
+        evaluate(classifier, heldOut);
+        return;
+    }
+
+    // Serialize the trained classifier for use by the analysis application.
+    await new Promise<void>(resolve => {
+        classifier.save(modelPath, error => {
+            if (error) {
+                console.error(`Error saving model to ${modelPath}:`, error);
+                process.exitCode = 1;
+            } else {
+                console.log(`Model saved to ${modelPath}`);
+            }
+            resolve();
+        });
+    });
+}
+
+//------------------------------------------------------------------------------
+
+/** Select a stable 20% of the rows for evaluation from their numeric IDs. */
+function isHeldOut(id: string): boolean {
+    // ponytail: ID modulo split, stratify by label if class balance drifts.
+    return Number(id) % 5 === 0;
+}
+
+//------------------------------------------------------------------------------
+
+/** Report accuracy, macro-F1, and a confusion matrix for held-out rows. */
+function evaluate(
+    classifier: SentimentClassifier,
+    rows: readonly DatasetRow[]
+): void {
+    // confusion[actual][predicted] counts every held-out prediction.
+    const confusion = Object.fromEntries(
+        SENTIMENT_LABELS.map(actual => [
+            actual,
+            Object.fromEntries(SENTIMENT_LABELS.map(predicted => [predicted, 0]))
+        ])
+    ) as Record<SentimentLabel, Record<string, number>>;
+    let correct = 0;
+
+    for (const row of rows) {
+        const predicted = classifier.classify(cleanText(row.Text));
+        confusion[row.Polarity][predicted] =
+            (confusion[row.Polarity][predicted] ?? 0) + 1;
+        if (predicted === row.Polarity) correct++;
+    }
+
+    // Macro-F1 averages per-class F1 so the majority class cannot dominate.
+    const f1Scores = SENTIMENT_LABELS.map(label => {
+        const truePositives = confusion[label][label] ?? 0;
+        const predictedCount = SENTIMENT_LABELS.reduce(
+            (sum, actual) => sum + (confusion[actual][label] ?? 0),
+            0
+        );
+        const actualCount = Object.values(confusion[label]).reduce(
+            (sum, count) => sum + count,
+            0
+        );
+        const precision = predictedCount ? truePositives / predictedCount : 0;
+        const recall = actualCount ? truePositives / actualCount : 0;
+        return precision + recall
+            ? (2 * precision * recall) / (precision + recall)
+            : 0;
+    });
+
+    console.log("Held-out evaluation:", {
+        testCount: rows.length,
+        accuracy: (correct / rows.length).toFixed(4),
+        macroF1: (
+            f1Scores.reduce((sum, value) => sum + value, 0) / f1Scores.length
+        ).toFixed(4)
+    });
+    console.table(confusion);
+    testModel(classifier, DEFAULT_SAMPLES);
 }
 
 //------------------------------------------------------------------------------
@@ -341,9 +435,10 @@ function getDefaultModelPath(name: ClassifierName): string {
 //------------------------------------------------------------------------------
 
 /** Load a trained model and evaluate either the defaults or one supplied issue. */
-async function testSavedModel(): Promise<void> {
+async function testSavedModel(name: ClassifierName): Promise<void> {
+    const modelPath = resolveModelPath(name);
     try {
-        const classifier = await loadClassifier(options.classifier, modelPath);
+        const classifier = await loadClassifier(name, modelPath);
         const samples = options.issue ? [options.issue] : DEFAULT_SAMPLES;
 
         console.log(`Model loaded from ${modelPath}`);
@@ -429,8 +524,7 @@ function cleanText(value: string): string {
 //------------------------------------------------------------------------------
 
 // Select test-only mode or the dataset training pipeline.
-if (options.test) {
-    void testSavedModel();
-} else {
-    trainModel();
+// Run the selected classifiers one after another so their output stays apart.
+for (const name of selectedClassifiers) {
+    await (options.test ? testSavedModel(name) : trainModel(name));
 }

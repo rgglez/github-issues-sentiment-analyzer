@@ -2,7 +2,7 @@ import fs from "node:fs";
 import {
     buildTfidfState,
     createTfidfVector,
-    tokenize,
+    featurize,
     type SparseVector,
     type TrainingDocument
 } from "./tfidf.js";
@@ -14,8 +14,8 @@ import type {
 //------------------------------------------------------------------------------
 
 const MODEL_KIND = "tfidf-linear-svm";
-const MODEL_VERSION = 1;
-const MAX_FEATURES = 10_000;
+const MODEL_VERSION = 2;
+const MAX_FEATURES = 5_000;
 const MIN_DOCUMENT_FREQUENCY = 2;
 const TRAINING_EPOCHS = 40;
 const INITIAL_LEARNING_RATE = 0.08;
@@ -49,7 +49,7 @@ class TfidfLinearSvmClassifier implements SentimentClassifier {
 
     /** Add one labeled document to the in-memory training corpus. */
     addDocument(text: string | string[], classification: string): void {
-        const tokens = tokenize(text);
+        const tokens = featurize(text);
 
         if (tokens.length === 0) return;
 
@@ -120,7 +120,7 @@ class TfidfLinearSvmClassifier implements SentimentClassifier {
     classify(text: string | string[]): string {
         this.assertTrained();
 
-        const scores = this.calculateScores(this.createVector(tokenize(text)));
+        const scores = this.calculateScores(this.createVector(featurize(text)));
         let bestIndex = 0;
 
         for (let index = 1; index < scores.length; index++) {
@@ -136,7 +136,7 @@ class TfidfLinearSvmClassifier implements SentimentClassifier {
     getClassifications(text: string | string[]): Classification[] {
         this.assertTrained();
 
-        const scores = this.calculateScores(this.createVector(tokenize(text)));
+        const scores = this.calculateScores(this.createVector(featurize(text)));
         const relativeScores = softmax(scores);
 
         return this.labels

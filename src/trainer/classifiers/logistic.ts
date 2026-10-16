@@ -6,7 +6,7 @@ import type {
 import {
     buildTfidfState,
     createTfidfVector,
-    tokenize,
+    featurize,
     type SparseVector,
     type TrainingDocument
 } from "./tfidf.js";
@@ -14,8 +14,8 @@ import {
 //------------------------------------------------------------------------------
 
 const MODEL_KIND = "tfidf-logistic-regression";
-const MODEL_VERSION = 1;
-const MAX_FEATURES = 10_000;
+const MODEL_VERSION = 2;
+const MAX_FEATURES = 5_000;
 const MIN_DOCUMENT_FREQUENCY = 2;
 const TRAINING_EPOCHS = 40;
 const INITIAL_LEARNING_RATE = 0.15;
@@ -49,7 +49,7 @@ class TfidfLogisticClassifier implements SentimentClassifier {
 
     /** Add one labeled document to the in-memory training corpus. */
     addDocument(text: string | string[], classification: string): void {
-        const tokens = tokenize(text);
+        const tokens = featurize(text);
 
         if (tokens.length === 0) return;
 
@@ -124,7 +124,7 @@ class TfidfLogisticClassifier implements SentimentClassifier {
     getClassifications(text: string | string[]): Classification[] {
         this.assertTrained();
 
-        const probabilities = softmax(this.calculateScores(this.createVector(tokenize(text))));
+        const probabilities = softmax(this.calculateScores(this.createVector(featurize(text))));
 
         return this.labels
             .map((label, index) => ({

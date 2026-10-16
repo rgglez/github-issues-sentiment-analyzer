@@ -1,5 +1,7 @@
 // Portable inference for the three sentiment models produced by the trainer.
 
+import { SentimentIntensityAnalyzer } from 'vader-sentiment';
+
 const MAX_MODEL_SIZE = 5_000_000;
 const LINEAR_KINDS = ['tfidf-linear-svm', 'tfidf-logistic-regression'] as const;
 
@@ -12,7 +14,7 @@ export type ModelName = (typeof MODEL_NAMES)[number];
 /** Serialized TF-IDF parameters shared by the SVM and logistic classifiers. */
 interface LinearModel {
 	kind: (typeof LINEAR_KINDS)[number];
-	version: 1;
+	version: 2;
 	vocabulary: string[];
 	inverseDocumentFrequencies: number[];
 	labels: string[];
@@ -64,7 +66,15 @@ export async function loadModel(bucket: R2Bucket, name: ModelName): Promise<Load
 	const value: unknown = await object.json<unknown>();
 	if (name === 'bayes') {
 		if (!isBayesModel(value)) throw new SentimentModelError('Invalid Bayes model.');
-		return { name, model: value };
+		// Natural keys classFeatures by each feature's position in `features`,
+		// which JSON.parse preserves as Object.keys order.
+		return {
+			name,
+			model: value,
+			vocabularyIndex: new Map(
+				Object.keys(value.features).map((feature, index) => [feature, index])
+			)
+		};
 	}
 	if (!isLinearModel(value)) throw new SentimentModelError(`Invalid ${name} model.`);
 
@@ -79,8 +89,8 @@ export async function loadModel(bucket: R2Bucket, name: ModelName): Promise<Load
 export function classifySentiment(loaded: LoadedModel, text: string): SentimentPrediction {
 	// Dispatch to the algorithm that matches the validated serialized model.
 	return loaded.name === 'bayes'
-		? classifyBayes(loaded.model as BayesModel, text)
-		: classifyLinear(loaded, text);
+		? classifyBayes(loaded, cleanText(text))
+		: classifyLinear(loaded, cleanText(text));
 }
 
 /** Build a sparse TF-IDF vector and score it with SVM margins or logistic logits. */
@@ -88,7 +98,7 @@ function classifyLinear(loaded: LoadedModel, text: string): SentimentPrediction 
 	const model = loaded.model as LinearModel;
 	// Count only tokens present in the trained vocabulary to keep the vector sparse.
 	const counts = new Map<number, number>();
-	for (const token of tokenize(cleanText(text))) {
+	for (const token of featurize(text)) {
 		const index = loaded.vocabularyIndex!.get(token);
 		if (index !== undefined) counts.set(index, (counts.get(index) ?? 0) + 1);
 	}
@@ -114,9 +124,14 @@ function classifyLinear(loaded: LoadedModel, text: string): SentimentPrediction 
 }
 
 /** Score the unique trained features in the text with smoothed Bayes log probabilities. */
-function classifyBayes(model: BayesModel, text: string): SentimentPrediction {
+function classifyBayes(loaded: LoadedModel, text: string): SentimentPrediction {
+	const model = loaded.model as BayesModel;
 	// Natural trains presence vectors, so repeated tokens count only once per document.
-	const present = new Set(tokenizeForBayes(text).filter((token) => token in model.features));
+	const present = new Set<number>();
+	for (const token of bayesFeatures(text)) {
+		const index = loaded.vocabularyIndex!.get(token);
+		if (index !== undefined) present.add(index);
+	}
 	const labels = Object.keys(model.classifier.classFeatures);
 	// Accumulate log probabilities to avoid underflow from multiplying tiny values.
 	const logScores = labels.map((label) => {
@@ -148,85 +163,55 @@ function tokenize(text: string): string[] {
 	return text.toLowerCase().match(/[\p{L}\p{N}_]+(?:['’-][\p{L}\p{N}_]+)*/gu) ?? [];
 }
 
-/** Tokenize and stem text to reproduce Natural's Bayes training pipeline. */
-function tokenizeForBayes(text: string): string[] {
-	return tokenize(text).map(porterStem);
+// Negators open a scope over the next tokens, matching VADER's 3-word window.
+const NEGATOR = /^(?:not|no|never|none|nobody|nothing|neither|nor|cannot|without|\p{L}+n['’]t)$/u;
+const NEGATION_WINDOW = 3;
+
+/** Prefix the tokens that follow a negator so "not good" differs from "good". */
+function markNegation(tokens: string[]): string[] {
+	let remaining = 0;
+	return tokens.map((token) => {
+		if (NEGATOR.test(token)) {
+			remaining = NEGATION_WINDOW;
+			return token;
+		}
+		if (remaining === 0) return token;
+		remaining--;
+		return `not_${token}`;
+	});
 }
 
-/** Reduce one English token with the Porter stemming rules used by the trainer. */
-function porterStem(word: string): string {
-	if (word.length < 3) return word;
-	// Measure alternating vowel/consonant groups for Porter suffix thresholds.
-	const measure = (value: string) =>
-		value
-			.replace(/[^aeiouy]+y/g, 'CV')
-			.replace(/[aeiou]+/g, 'V')
-			.replace(/[^V]+/g, 'C')
-			.replace(/^C/, '')
-			.replace(/V$/, '').length / 2;
-	// Identify whether a candidate stem contains a vowel before removing a suffix.
-	const hasVowel = (value: string) => /[aeiou]|[^aeiou]y/.test(value);
+/** Join every run of n contiguous tokens into one space-separated feature. */
+function ngrams(tokens: string[], n: number): string[] {
+	return tokens
+		.slice(0, Math.max(0, tokens.length - n + 1))
+		.map((_, index) => tokens.slice(index, index + n).join(' '));
+}
 
-	// Apply Porter steps 1a through 1c for plurals, participles, and terminal y.
-	let value = word.toLowerCase();
-	value = value.replace(/(ss|i)es$/, '$1');
-	if (/[^s]s$/.test(value) && value.length > 2) value = value.slice(0, -1);
-	if (/eed$/.test(value)) {
-		if (measure(value.slice(0, -3)) > 0) value = value.replace(/eed$/, 'ee');
-	} else if (/(ed|ing)$/.test(value)) {
-		const base = value.replace(/(ed|ing)$/, '');
-		if (hasVowel(base)) {
-			value = base;
-			if (/(at|bl|iz)$/.test(value)) value += 'e';
-			else if (/([^aeiou])\1$/.test(value) && !/[lsz]$/.test(value)) value = value.slice(0, -1);
-			else if (measure(value) === 1 && /[^aeiou][aeiouy][^aeiouwxy]$/.test(value)) value += 'e';
-		}
-	}
-	if (/y$/.test(value) && hasVowel(value.slice(0, -1))) value = value.slice(0, -1) + 'i';
-	// Apply Porter steps 2 and 3 using their ordered suffix replacement table.
-	const replacements: Array<[RegExp, string, number]> = [
-		[/(ational)$/, 'ate', 0],
-		[/(tional)$/, 'tion', 0],
-		[/(enci)$/, 'ence', 0],
-		[/(anci)$/, 'ance', 0],
-		[/(izer|ization)$/, 'ize', 0],
-		[/(abli)$/, 'able', 0],
-		[/(bli)$/, 'ble', 0],
-		[/(alli|alism|aliti)$/, 'al', 0],
-		[/(entli)$/, 'ent', 0],
-		[/(eli)$/, 'e', 0],
-		[/(ousli|ousness)$/, 'ous', 0],
-		[/(ation|ator)$/, 'ate', 0],
-		[/(iveness|iviti)$/, 'ive', 0],
-		[/(fulness)$/, 'ful', 0],
-		[/(biliti)$/, 'ble', 0],
-		[/(logi)$/, 'log', 0],
-		[/(icate|iciti|ical)$/, 'ic', 0],
-		[/(ative)$/, '', 0],
-		[/(alize)$/, 'al', 0],
-		[/(ful|ness)$/, '', 0]
-	];
-	for (const [pattern, replacement, threshold] of replacements) {
-		const stem = value.replace(pattern, '');
-		if (pattern.test(value) && measure(stem) > threshold) {
-			value = value.replace(pattern, replacement);
-			break;
-		}
-	}
-	// Apply Porter step 4 to remove longer derivational suffixes.
-	const step4 =
-		/^(.+?)(al|ance|ence|er|ic|able|ible|ant|ement|ment|ent|ou|ism|ate|iti|ous|ive|ize)$/;
-	const match = step4.exec(value) ?? /^(.+?)(s|t)ion$/.exec(value);
-	if (match && measure(match[1]!) > 1)
-		value = match[1]! + (match[2] === 's' || match[2] === 't' ? match[2] : '');
-	// Apply Porter steps 5a and 5b to remove a final e or reduce a final double l.
-	if (/e$/.test(value)) {
-		const stem = value.slice(0, -1);
-		if (measure(stem) > 1 || (measure(stem) === 1 && !/[^aeiou][aeiouy][^aeiouwxy]$/.test(stem)))
-			value = stem;
-	}
-	if (/ll$/.test(value) && measure(value) > 1) value = value.slice(0, -1);
-	return value;
+/** Bucket VADER's compound score, which handles negators and intensifiers. */
+function vaderToken(text: string): string {
+	const { compound } = SentimentIntensityAnalyzer.polarity_scores(text);
+	if (compound <= -0.5) return '__vader_neg2__';
+	if (compound <= -0.05) return '__vader_neg1__';
+	if (compound >= 0.5) return '__vader_pos2__';
+	if (compound >= 0.05) return '__vader_pos1__';
+	return '__vader_neu__';
+}
+
+/** Build linear-model features exactly as the trainer's featurize does. */
+export function featurize(text: string): string[] {
+	const tokens = tokenize(text);
+	if (tokens.length === 0) return [];
+	return [...markNegation(tokens), ...ngrams(tokens, 2), ...ngrams(tokens, 3), vaderToken(text)];
+}
+
+/**
+ * Build Bayes features as the trainer does: unstemmed, negation-marked
+ * unigrams and one VADER bucket. The trainer drops Natural's stopwords, so the
+ * caller's model-feature filter removes them here without a stopword list.
+ */
+export function bayesFeatures(text: string): string[] {
+	return [...markNegation(tokenize(text)), vaderToken(text)];
 }
 
 /** Convert arbitrary decision scores into a numerically stable probability distribution. */
@@ -268,7 +253,7 @@ function isLinearModel(value: unknown): value is LinearModel {
 	if (
 		!isRecord(value) ||
 		!LINEAR_KINDS.includes(value.kind as (typeof LINEAR_KINDS)[number]) ||
-		value.version !== 1
+		value.version !== 2
 	)
 		return false;
 	// Validate every persisted vector and matrix element before checking dimensions.

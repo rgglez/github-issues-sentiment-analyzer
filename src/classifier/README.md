@@ -61,7 +61,8 @@ done
 
 ## Validation and deployment
 
-From the repository root, the Makefile provides the complete workflow:
+From this directory (`src/classifier`), the Makefile provides the complete
+workflow:
 
 ```sh
 make install

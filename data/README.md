@@ -19,6 +19,10 @@ Davide Dongiovanni, Daniela Girardi, and Filippo Lanubile.
 - License: https://creativecommons.org/licenses/by/4.0/
 - Associated paper: https://doi.org/10.1145/3379597.3387446
 
+The model files contain only what inference needs. The Bayes artifact keeps
+Natural's `features` and `classifier` fields and omits `docs`, which would
+otherwise copy every training text into the file uploaded to R2.
+
 The training process replaces URLs, code blocks, commit hashes, and repeated
 whitespace in memory. It does not modify the CSV stored in this directory.
 

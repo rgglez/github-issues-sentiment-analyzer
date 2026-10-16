@@ -39,6 +39,45 @@ trains one linear hinge-loss model per sentiment class. Its JSON artifact can
 be evaluated with plain TypeScript in a Cloudflare Worker; it does not require
 native Node.js modules or WebAssembly.
 
+### Features and negation
+
+All classifiers share the same tokenizer and add two signals that help with
+negated phrases such as `not so bad` or `not good`, which appear too rarely in
+the dataset to be learned from it alone:
+
+- Negation marking: the three tokens after a negator (`not`, `no`, `never`,
+  `without`, `doesn't`, and so on) are prefixed with `not_`, so `not good`
+  produces `not not_good` instead of the positive unigram `good`.
+- A VADER polarity bucket:  scores the document with
+  its lexicon and valence-shifter rules (negation, intensifiers such as `so` or
+  `very`, and `but`). The score is added as one pseudo-token
+  (`__vader_neg2__`, `__vader_neg1__`, `__vader_neu__`, `__vader_pos1__`, or
+  `__vader_pos2__`), and each classifier learns how much to trust it.
+
+Logistic regression and SVM also add contiguous bigrams and trigrams. The
+document-frequency vocabulary keeps only the 5,000 most frequent features.
+Bayes uses unstemmed unigrams without Natural's stopwords and no n-grams,
+because Natural does not prune rare features and the model would outgrow the
+Worker's size limit.
+
+The Worker in `src/classifier` reimplements these features, so any change to
+them must be made in both places and requires retraining and re-uploading all
+three models.
+
+### Make targets
+
+`src/trainer/Makefile` wraps the same commands. `CLASSIFIER` defaults to
+`all`, and `ISSUE` limits `test` to one text:
+
+```sh
+cd src/trainer
+make install
+make train                                # train and save all three models
+make eval CLASSIFIER=svm                  # hold-out metrics, nothing saved
+make test CLASSIFIER=bayes ISSUE="not so bad"
+make help                                 # list every target
+```
+
 Additional development commands:
 
 - `pnpm check`: type-checks `trainer.ts` without producing output files.
@@ -47,17 +86,23 @@ Additional development commands:
 
 ### Command-line options
 
-- `-c, --classifier <name>`: selects `bayes` (the default), `logistic`, or
-  `svm` for training and testing.
+- `-c, --classifier <name>`: selects `bayes` (the default), `logistic`,
+  `svm`, or `all` for training and testing. `all` processes the three
+  classifiers one after another with their default model paths.
 - `-d, --dataset <path>`: sets the training CSV path. It defaults to
   `../../data/github_gold.csv`. This option is ignored when `--test` is used.
 - `-m, --model <path>`: sets the output path for a newly trained model or the
   input path for `--test`. Bayes defaults to
   `../../data/github-sentiment-bayes-model.json`; logistic regression defaults
   to `../../data/github-sentiment-logistic-model.json`, and SVM defaults to
-  `../../data/github-sentiment-svm-model.json`.
+  `../../data/github-sentiment-svm-model.json`. It cannot be combined with
+  `--classifier all`.
 - `-t, --test`: loads the existing model selected by `--model` and runs only
   the smoke tests. It does not read the dataset, train, or overwrite the model.
+- `-e, --eval`: trains on 80% of the dataset (rows whose numeric `ID` is not
+  divisible by 5), then reports accuracy, macro-F1, and a confusion matrix for
+  the other 20%. It also prints the smoke-test predictions and does not save
+  the model.
 - `-i, --issue <text>`: with `--test`, evaluates this issue instead of the
   default smoke-test samples.
 - `-V, --version`: prints the trainer version and exits.
@@ -132,14 +177,12 @@ percentages are reported as zero.
 
 The SvelteKit Worker in `src/classifier` reads the three classifier artifacts
 through the private `MODELS` R2 binding configured in `wrangler.jsonc`. Create
-the bucket, train the models, and upload them from the repository root:
+the bucket, train the models, and upload them:
 
 ```sh
 cd src/classifier
 pnpm exec wrangler r2 bucket create github-issues-sentiment-models
-cd ../trainer
-pnpm trainer -- --classifier all
-cd ../..
+make -C ../trainer train
 make upload-models
 ```
 
@@ -159,7 +202,8 @@ Worker types after changing bindings in `src/classifier/wrangler.jsonc`.
 ## TODO
 
 - Evaluate Cloudflare Workers AI's `distilbert-sst-2-int8` as a contextual
-  sentiment classifier, especially for negations such as `not bad`.
+  sentiment classifier. Negation marking and VADER now cover simple cases
+  such as `not bad`.
 - Compare its accuracy, latency, and operating cost against the current
   TF-IDF SVM using a labeled test set of GitHub issues.
 - Determine how to preserve the `neutral` class because the available
@@ -196,5 +240,6 @@ in [LICENSE](LICENSE). Third-party data is not covered by the Apache License;
 `data/github_gold.csv` remains licensed under CC BY 4.0.
 
 [cc-by-4.0]: https://creativecommons.org/licenses/by/4.0/
+[vader]: https://github.com/vaderSentiment/vaderSentiment-js
 [dataset-doi]: https://doi.org/10.6084/m9.figshare.11604597
 [paper-doi]: https://doi.org/10.1145/3379597.3387446

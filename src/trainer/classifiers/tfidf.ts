@@ -1,5 +1,7 @@
 // Shared TF-IDF representation used by portable linear classifiers.
 
+import { SentimentIntensityAnalyzer } from "vader-sentiment";
+
 //------------------------------------------------------------------------------
 
 export interface TrainingDocument {
@@ -31,6 +33,63 @@ export function tokenize(text: string | string[]): string[] {
             .toLowerCase()
             .match(/[\p{L}\p{N}_]+(?:['’-][\p{L}\p{N}_]+)*/gu) ?? []
     );
+}
+
+//------------------------------------------------------------------------------
+
+// Negators open a scope over the next tokens, matching VADER's 3-word window.
+const NEGATOR = /^(?:not|no|never|none|nobody|nothing|neither|nor|cannot|without|\p{L}+n['’]t)$/u;
+const NEGATION_WINDOW = 3;
+
+/** Prefix the tokens that follow a negator so "not good" differs from "good". */
+export function markNegation(tokens: string[]): string[] {
+    let remaining = 0;
+
+    return tokens.map(token => {
+        if (NEGATOR.test(token)) {
+            remaining = NEGATION_WINDOW;
+            return token;
+        }
+        if (remaining === 0) return token;
+        remaining--;
+        return `not_${token}`;
+    });
+}
+
+/** Join every run of n contiguous tokens into one space-separated feature. */
+export function ngrams(tokens: string[], n: number): string[] {
+    return tokens
+        .slice(0, Math.max(0, tokens.length - n + 1))
+        .map((_, index) => tokens.slice(index, index + n).join(" "));
+}
+
+/** Bucket VADER's compound score, which handles negators and intensifiers. */
+export function vaderToken(text: string): string {
+    const { compound } = SentimentIntensityAnalyzer.polarity_scores(text);
+
+    if (compound <= -0.5) return "__vader_neg2__";
+    if (compound <= -0.05) return "__vader_neg1__";
+    if (compound >= 0.5) return "__vader_pos2__";
+    if (compound >= 0.05) return "__vader_pos1__";
+    return "__vader_neu__";
+}
+
+/**
+ * Build the linear-model features: negation-marked unigrams, contiguous
+ * bigrams and trigrams of the raw tokens, and one VADER polarity bucket.
+ */
+export function featurize(text: string | string[]): string[] {
+    const raw = Array.isArray(text) ? text.join(" ") : text;
+    const tokens = tokenize(raw);
+
+    if (tokens.length === 0) return [];
+
+    return [
+        ...markNegation(tokens),
+        ...ngrams(tokens, 2),
+        ...ngrams(tokens, 3),
+        vaderToken(raw)
+    ];
 }
 
 //------------------------------------------------------------------------------

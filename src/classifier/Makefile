@@ -1,6 +1,5 @@
 # Build and deployment entry points for the SvelteKit sentiment analyzer Worker.
 
-CLASSIFIER_DIR := src/classifier
 DATA_DIR := ../../data
 PNPM := pnpm
 WRANGLER := $(PNPM) exec wrangler
@@ -32,55 +31,55 @@ help:
 
 # Install the exact dependency graph recorded in pnpm-lock.yaml.
 install:
-	cd $(CLASSIFIER_DIR) && $(PNPM) install --frozen-lockfile
+	$(PNPM) install --frozen-lockfile
 
 # Delegate interactive authentication and credential storage to Wrangler.
 login:
-	cd $(CLASSIFIER_DIR) && $(WRANGLER) login
+	$(WRANGLER) login
 
 # Display the Cloudflare identity and scopes available to the active credentials.
 whoami:
-	cd $(CLASSIFIER_DIR) && $(WRANGLER) whoami
+	$(WRANGLER) whoami
 
 # Synchronize generated Worker environment types with wrangler.jsonc.
 types:
-	cd $(CLASSIFIER_DIR) && $(WRANGLER) types
+	$(WRANGLER) types
 
 # Run framework and TypeScript diagnostics, including a binding-type freshness check.
 check:
-	cd $(CLASSIFIER_DIR) && $(PNPM) run check
+	$(PNPM) run check
 
 # Verify source formatting and ESLint rules.
 lint:
-	cd $(CLASSIFIER_DIR) && $(PNPM) run lint
+	$(PNPM) run lint
 
 # Execute all configured Vitest projects once.
 test:
-	cd $(CLASSIFIER_DIR) && $(PNPM) run test
+	$(PNPM) run test
 
 # Produce the SvelteKit client and Cloudflare Worker server bundles.
 build:
-	cd $(CLASSIFIER_DIR) && $(PNPM) run build
+	$(PNPM) run build
 
 # Start the local development server with hot module replacement.
 dev:
-	cd $(CLASSIFIER_DIR) && $(PNPM) run dev
+	$(PNPM) run dev
 
 # Serve the previously built Cloudflare Worker through Wrangler.
 preview: build
-	cd $(CLASSIFIER_DIR) && $(PNPM) run preview
+	$(PNPM) run preview
 
 # Exercise Wrangler's deployment pipeline without publishing the Worker.
 deploy-dry-run: build
-	cd $(CLASSIFIER_DIR) && $(WRANGLER) deploy --dry-run
+	$(WRANGLER) deploy --dry-run
 
 # Publish the validated Worker and its static assets using wrangler.jsonc.
 deploy: build
-	cd $(CLASSIFIER_DIR) && $(WRANGLER) deploy
+	$(WRANGLER) deploy
 
 # Upload the three trained model artifacts expected by the production R2 binding.
 upload-models:
-	cd $(CLASSIFIER_DIR) && for model in $(MODELS); do \
+	for model in $(MODELS); do \
 		$(WRANGLER) r2 object put "$(R2_BUCKET)/github-sentiment-$$model-model.json" \
 			--file "$(DATA_DIR)/github-sentiment-$$model-model.json" --remote; \
 	done

@@ -31,4 +31,21 @@ license does not replace or supersede the CC BY 4.0 license applicable to the
 dataset. The generated sentiment model was trained from this dataset, so this
 attribution must be retained when the model is redistributed.
 
+## vaderSentiment-js
+
+The trainer and the Worker use the `vader-sentiment` npm package, a
+JavaScript port of VADER (Hutto and Gilbert, ICWSM 2014), to add one
+polarity feature per document. The Worker bundle includes its code and
+lexicon.
+
+- Source: https://github.com/vaderSentiment/vaderSentiment-js
+- License: [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
+
+Its NOTICE file states:
+
+> vaderSentiment-js
+> Copyright 2018 Comcast Cable Communications Management, LLC
+>
+> This product includes software developed at Comcast (http://www.comcast.com/).
+
 [cc-by-4.0]: https://creativecommons.org/licenses/by/4.0/
